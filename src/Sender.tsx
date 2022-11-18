@@ -1,12 +1,12 @@
 import { useRef, useCallback, useState, useMemo, ChangeEvent } from "react";
-import Peer from "skyway-js";
+import Peer, { PeerError } from "skyway-js";
 
 const Sender = (props: { apikey: string }) => {
   const { apikey } = props;
   const [started, setStarted] = useState(false);
   const [intervalId, setIntervalId] = useState<number>(0);
   const [peer, setPeer] = useState<Peer | undefined>();
-  const [peerId, setPeerId] = useState("");
+  const [peerId, setPeerId] = useState<string | undefined>("");
   const [targetPeerId, setTargetPeerId] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
 
@@ -61,21 +61,6 @@ const Sender = (props: { apikey: string }) => {
     }
   }, [canvasRef, counter, setIntervalId]);
 
-  // peer open時の処理
-  const onOpen = useCallback(
-    (peerId: string) => {
-      console.log("peer open:", peerId);
-      console.log("peer call:", targetPeerId);
-
-      const stream = canvasRef.current?.captureStream(0);
-
-      peer?.call(targetPeerId, stream, {
-        videoCodec: "VP9",
-      });
-    },
-    [canvasRef, targetPeerId, peer]
-  );
-
   // 停止
   const onStop = useCallback(() => {
     setStarted(false);
@@ -93,10 +78,9 @@ const Sender = (props: { apikey: string }) => {
 
     // peerを破棄
     peer?.destroy();
-    peer?.off("open", onOpen);
     setPeer(undefined);
     setPeerId("");
-  }, [setStarted, intervalId, setIntervalId, peer, setPeer, setPeerId, onOpen]);
+  }, [setStarted, intervalId, setIntervalId, peer, setPeer, setPeerId]);
 
   // 開始
   const onStart = useCallback(() => {
@@ -104,33 +88,45 @@ const Sender = (props: { apikey: string }) => {
     const id = window.requestAnimationFrame(render);
     setIntervalId(id);
     setStarted(true);
+    setErrorMsg("");
 
     try {
       // peerを作成
-      const newPeerId = Math.floor(Math.random() * 1000000);
-      const newPeer = new Peer(`${newPeerId}`, {
+      const newPeer = new Peer({
         key: apikey,
+        //debug: 3,
       });
-      console.log("create peer:", newPeerId);
+
       // peerを保持
       setPeer(newPeer);
-      setPeerId(`${newPeerId}`);
+      newPeer.on("error", (err: PeerError) => {
+        console.log(err.message);
+        setErrorMsg(err.message);
+      });
 
-      newPeer.on("open", onOpen);
+      newPeer.on("open", (peerId: string) => {
+        console.log("peer open:", peerId);
+        console.log("peer call to:", targetPeerId);
+
+        // canvasのキャプチャストリームで通信を開始
+        const stream = canvasRef.current?.captureStream(10);
+        newPeer.call(targetPeerId, stream, {
+          videoCodec: "VP9",
+        });
+      });
     } catch (e: any) {
       console.error("failed to create peer.");
       console.error(e);
       setErrorMsg("failed to create peer.");
     }
   }, [
-    render,
-    setIntervalId,
-    setStarted,
-    setPeer,
-    setPeerId,
-    setErrorMsg,
     apikey,
-    onOpen,
+    render,
+    setErrorMsg,
+    setIntervalId,
+    setPeer,
+    setStarted,
+    targetPeerId,
   ]);
 
   // ボタン押下
@@ -139,11 +135,7 @@ const Sender = (props: { apikey: string }) => {
   }, [started, onStart, onStop]);
 
   const connectedState = useMemo(() => {
-    if (peerId.length === 0) {
-      return null;
-    } else {
-      return <p>PeerID: {peerId}</p>;
-    }
+    return peerId ? <p>PeerID: {peerId}</p> : null;
   }, [peerId]);
 
   return (
