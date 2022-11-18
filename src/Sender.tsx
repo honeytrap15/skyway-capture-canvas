@@ -56,10 +56,8 @@ const Sender = (props: { apikey: string }) => {
       );
 
       counter.current += 628 / 100;
-      const id = window.requestAnimationFrame(render);
-      setIntervalId(id);
     }
-  }, [canvasRef, counter, setIntervalId]);
+  }, [canvasRef, counter]);
 
   // 停止
   const onStop = useCallback(() => {
@@ -67,14 +65,16 @@ const Sender = (props: { apikey: string }) => {
     setErrorMsg("");
 
     // 描画を停止
-    window.cancelAnimationFrame(intervalId);
+    clearInterval(intervalId);
     setIntervalId(0);
 
     // canvasをクリア
-    const ctx = canvasRef.current?.getContext("2d");
-    if (ctx) {
-      ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-    }
+    window.requestAnimationFrame(() => {
+      const ctx = canvasRef.current?.getContext("2d");
+      if (ctx) {
+        ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+      }
+    });
 
     // peerを破棄
     peer?.destroy();
@@ -85,7 +85,9 @@ const Sender = (props: { apikey: string }) => {
   // 開始
   const onStart = useCallback(() => {
     // 描画を開始
-    const id = window.requestAnimationFrame(render);
+    const id = window.setInterval(() => {
+      window.requestAnimationFrame(render);
+    }, 10);
     setIntervalId(id);
     setStarted(true);
     setErrorMsg("");
